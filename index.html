@@ -667,9 +667,10 @@
 
     // ===== Player Controller =====
     class PlayerController {
-      constructor(camera, world) {
+      constructor(camera, world, scene) {
         this.camera = camera;
         this.world = world;
+        this.scene = scene;
         this.position = new THREE.Vector3(0, 1.6, 6);
         this.velocity = new THREE.Vector3();
         this.direction = new THREE.Vector3();
@@ -687,13 +688,13 @@
       }
       init() {
         this.camera.position.copy(this.position);
-        this.flashlight = new THREE.SpotLight(0xffffee, 10.0, 35, Math.PI/3, 0.5, 0.8);
-        this.flashlight.position.set(0, -0.05, 0);
-        this.camera.add(this.flashlight);
-        const target = new THREE.Object3D();
-        target.position.set(0, -0.05, -1);
-        this.camera.add(target);
-        this.flashlight.target = target;
+        // Scene-level flashlight for reliable rendering
+        this.flashlight = new THREE.SpotLight(0xffffff, 30.0, 50, Math.PI/2.5, 0.3, 0.5);
+        this.flashlight.position.copy(this.position);
+        this.scene.add(this.flashlight);
+        this.flashlightTarget = new THREE.Object3D();
+        this.flashlight.target = this.flashlightTarget;
+        this.scene.add(this.flashlightTarget);
 
         document.addEventListener('keydown', e => this.onKeyDown(e));
         document.addEventListener('keyup', e => this.onKeyUp(e));
@@ -709,7 +710,7 @@
           case 'KeyS': case 'ArrowDown': this.moveBackward = true; break;
           case 'KeyA': case 'ArrowLeft': this.moveLeft = true; break;
           case 'KeyD': case 'ArrowRight': this.moveRight = true; break;
-          case 'KeyF': this.toggleFlashlight(); break;
+          case 'KeyF': case 'KeyL': this.toggleFlashlight(); break;
         }
       }
       onKeyUp(e) {
@@ -728,7 +729,7 @@
         this.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, this.pitch));
       }
       toggleFlashlight() {
-        this.flashlight.intensity = this.flashlight.intensity > 0 ? 0 : 10.0;
+        this.flashlight.intensity = this.flashlight.intensity > 0 ? 0 : 30.0;
       }
       update(dt, audio) {
         this.direction.set(0, 0, 0);
@@ -754,6 +755,12 @@
         this.camera.rotation.order = 'YXZ';
         this.camera.rotation.y = this.yaw;
         this.camera.rotation.x = this.pitch;
+
+        // Update scene flashlight to match camera
+        const camPos = this.camera.position;
+        this.flashlight.position.copy(camPos);
+        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        this.flashlightTarget.position.copy(camPos).add(dir);
 
         const isMoving = this.direction.length() > 0;
         if (isMoving) {
@@ -1028,7 +1035,7 @@
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
         this.world = new WorldBuilder(this.scene);
-        this.player = new PlayerController(this.camera, this.world);
+        this.player = new PlayerController(this.camera, this.world, this.scene);
         this.interaction = new InteractionSystem(this.camera, this.world, this.ui, this);
         this.tasks = new TaskSystem(this.ui);
         this.ghost = new GhostAI(this.scene, this.world, this.player, this);
