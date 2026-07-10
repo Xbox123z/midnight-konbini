@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>深夜コンビニ | Midnight Konbini</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: "Noto Serif JP", "Yu Mincho", "MS Mincho", "SimSun", serif;
+      color: #e0e0e0;
+      user-select: none;
+    }
+    canvas { display: block; }
+    #start-screen, #end-screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: radial-gradient(circle at center, #0a0f1a 0%, #000 100%);
+      z-index: 100;
+      transition: opacity 0.8s ease;
+    }
+    #end-screen { display: none; opacity: 0; z-index: 101; }
+    h1 {
+      font-size: 4rem;
+      letter-spacing: 0.3em;
+      color: #e0e0e0;
+      text-shadow: 0 0 20px rgba(224,224,224,0.3), 0 0 40px rgba(139,0,0,0.4);
+      margin-bottom: 0.5em;
+    }
+    .subtitle {
+      font-size: 1rem;
+      color: #888;
+      margin-bottom: 2em;
+      letter-spacing: 0.2em;
+    }
+    .btn {
+      padding: 0.8em 2em;
+      border: 1px solid #e0e0e0;
+      background: transparent;
+      color: #e0e0e0;
+      font-size: 1rem;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .btn:hover {
+      background: #e0e0e0;
+      color: #000;
+      box-shadow: 0 0 20px rgba(224,224,224,0.4);
+    }
+    .controls {
+      margin-top: 2em;
+      font-size: 0.8rem;
+      color: #666;
+      text-align: center;
+      line-height: 1.8;
+    }
+    #game-ui {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
+    #crosshair {
+      position: absolute; left: 50%; top: 50%;
+      width: 6px; height: 6px;
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      mix-blend-mode: difference;
+    }
+    #task-panel {
+      position: absolute; top: 24px; right: 24px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 16px 20px;
+      min-width: 260px;
+      backdrop-filter: blur(4px);
+    }
+    #task-panel h3 {
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 10px;
+      letter-spacing: 0.15em;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 6px;
+    }
+    .task {
+      font-size: 0.8rem;
+      color: #ddd;
+      margin: 6px 0;
+      transition: color 0.3s;
+    }
+    .task.done {
+      color: #555;
+      text-decoration: line-through;
+    }
+    .task.active {
+      color: #39ff14;
+    }
+    #interaction-prompt {
+      position: absolute; left: 50%; bottom: 80px;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      color: #39ff14;
+      text-shadow: 0 0 8px rgba(57,255,20,0.6);
+      opacity: 0;
+      transition: opacity 0.2s;
+      letter-spacing: 0.1em;
+    }
+    #fear-overlay {
+      position: absolute; inset: 0;
+      box-shadow: inset 0 0 0 0 rgba(139,0,0,0);
+      transition: box-shadow 0.3s;
+      pointer-events: none;
+    }
+    #message {
+      position: absolute; left: 50%; top: 30%;
+      transform: translateX(-50%);
+      font-size: 1.1rem;
+      color: #e0e0e0;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.5s;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+      max-width: 80%;
+    }
+    #vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.8) 100%);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="start-screen">
+    <h1>深夜コンビニ</h1>
+    <div class="subtitle">MIDNIGHT KONBINI</div>
+    <button class="btn" id="start-btn">開始</button>
+    <div class="controls">
+      WASD / 方向键 移动<br>
+      鼠标 视角<br>
+      E / 点击 交互<br>
+      F 手电筒<br>
+      ESC 释放鼠标
+    </div>
+  </div>
+
+  <div id="game-ui">
+    <div id="vignette"></div>
+    <div id="fear-overlay"></div>
+    <div id="crosshair"></div>
+    <div id="task-panel">
+      <h3>タスク</h3>
+      <div id="task-list"></div>
+    </div>
+    <div id="interaction-prompt"></div>
+    <div id="message"></div>
+  </div>
+
+  <div id="end-screen">
+    <h1 id="end-title">終了</h1>
+    <div class="subtitle" id="end-subtitle"></div>
+    <button class="btn" id="restart-btn">再開</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ===== Utility functions =====
+    function createCanvasTexture(width, height, drawFn) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      drawFn(ctx, width, height);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      return tex;
+    }
+
+    function makePixelTexture(drawFn) {
+      return createCanvasTexture(128, 128, drawFn);
+    }
+
+    // ===== Audio Engine =====
+    class AudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.droneOsc = null;
+        this.droneGain = null;
+        this.enabled = false;
+      }
+      init() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.5;
+        this.masterGain.connect(this.ctx.destination);
+        this.enabled = true;
+        this.startDrone();
+      }
+      startDrone() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        this.droneOsc = this.ctx.createOscillator();
+        this.droneOsc.type = 'sawtooth';
+        this.droneOsc.frequency.setValueAtTime(50, t);
+        this.droneGain = this.ctx.createGain();
+        this.droneGain.gain.setValueAtTime(0.0, t);
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(200, t);
+        this.droneOsc.connect(filter);
+        filter.connect(this.droneGain);
+        this.droneGain.connect(this.masterGain);
+        this.droneOsc.start();
+        this.droneGain.gain.linearRampToValueAtTime(0.12, t + 3);
+      }
+      setDroneIntensity(intensity) {
+        if (!this.droneGain) return;
+        const t = this.ctx.currentTime;
+        this.droneGain.gain.linearRampToValueAtTime(0.08 + intensity * 0.2, t + 0.5);
+        if (this.droneOsc) {
+          this.droneOsc.frequency.linearRampToValueAtTime(50 + intensity * 30, t + 0.5);
+        }
+      }
+      playFootstep() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.08);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+        }
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 600;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.12, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        src.start(t);
+      }
+      playHeartbeat() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(40, t);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.25, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.5);
+      }
+      playGlitch() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.3);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.3);
+      }
+    }
+
+    // ===== Texture Generator =====
+    const Textures = {
+      floor: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#3a3a3a';
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= w; i += 32) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke();
+        }
+        for (let j = 0; j <= h; j += 32) {
+          ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(w, j); ctx.stroke();
+        }
+        for (let k = 0; k < 20; k++) {
+          ctx.fillStyle = `rgba(30,30,30,${Math.random()*0.5})`;
+          ctx.beginPath();
+          ctx.arc(Math.random()*w, Math.random()*h, Math.random()*12+4, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }),
+      wall: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#d8d0c0';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#c8c0b0';
+        for (let y = 0; y < h; y += 16) {
+          if (Math.random() > 0.7) ctx.fillRect(0, y, w, 16);
+        }
+        ctx.strokeStyle = '#b0a898';
+        ctx.lineWidth = 1;
+        for (let y = 0; y <= h; y += 32) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+      }),
+      ceiling: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#e8e8e8';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#d8d8d8';
+        for (let i = 0; i < 50; i++) {
+          const x = Math.random()*w, y = Math.random()*h, r = Math.random()*3+1;
+          ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+        }
+      }),
+      shelf: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#555';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#777';
+        ctx.fillRect(0, 0, w, 8);
+        ctx.fillRect(0, h-8, w, 8);
+      }),
+      product1: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#c23'; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 24px sans-serif'; ctx.fillText('カップ麺', 10, 70);
+      }),
+      product2: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#28a'; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 24px sans-serif'; ctx.fillText('お茶', 30, 70);
+      }),
+      product3: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#e82'; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#000'; ctx.font = 'bold 24px sans-serif'; ctx.fillText('スナック', 8, 70);
+      }),
+      fridge: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#aaddff'; ctx.fillRect(0,0,w,h);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+        for (let i=20;i<w;i+=30) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+      }),
+      register: makePixelTexture((ctx, w, h) => {
+        ctx.fillStyle = '#333'; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#0f0'; ctx.fillRect(20,20,w-40,h-40);
+        ctx.fillStyle = '#000'; ctx.font = '16px monospace'; ctx.fillText('¥0', 44, 74);
+      })
+    };
+
+    // ===== Post Process (PS1/VHS) =====
+    class PostProcess {
+      constructor(renderer) {
+        this.renderer = renderer;
+        this.width = 480;
+        this.height = 270;
+        this.time = 0;
+        this.renderTarget = new THREE.WebGLRenderTarget(this.width, this.height, {
+          minFilter: THREE.NearestFilter,
+          magFilter: THREE.NearestFilter,
+          format: THREE.RGBAFormat,
+          type: THREE.UnsignedByteType
+        });
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.ShaderMaterial({
+          uniforms: {
+            tDiffuse: { value: this.renderTarget.texture },
+            uTime: { value: 0 },
+            uNoise: { value: 0.12 },
+            uScanline: { value: 0.12 },
+            uChroma: { value: 0.006 },
+            uVignette: { value: 1.3 },
+            uFlicker: { value: 0.0 }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float uTime;
+            uniform float uNoise;
+            uniform float uScanline;
+            uniform float uChroma;
+            uniform float uVignette;
+            uniform float uFlicker;
+            varying vec2 vUv;
+            float rand(vec2 co) {
+              return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
+            }
+            void main() {
+              vec2 uv = vUv;
+              vec2 pixel = floor(uv * vec2(480.0, 270.0)) / vec2(480.0, 270.0);
+              float r = texture2D(tDiffuse, pixel + vec2(uChroma, 0.0)).r;
+              float g = texture2D(tDiffuse, pixel).g;
+              float b = texture2D(tDiffuse, pixel - vec2(uChroma, 0.0)).b;
+              vec3 col = vec3(r, g, b);
+              float scan = sin(uv.y * 600.0 + uTime * 5.0) * 0.5 + 0.5;
+              col *= 1.0 - scan * uScanline;
+              float n = rand(uv + uTime) * uNoise;
+              col += vec3(n);
+              col *= 1.0 - uFlicker * (rand(vec2(uTime)) * 0.5);
+              float vig = length((uv - 0.5) * 1.6);
+              col *= smoothstep(uVignette, 0.2, vig);
+              gl_FragColor = vec4(col, 1.0);
+            }
+          `,
+          depthTest: false,
+          depthWrite: false
+        });
+        this.quad = new THREE.Mesh(geometry, material);
+        this.camera2 = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        this.scene2 = new THREE.Scene();
+        this.scene2.add(this.quad);
+      }
+      render(scene, camera, dt) {
+        this.time += dt;
+        this.quad.material.uniforms.uTime.value = this.time;
+        this.renderer.setRenderTarget(this.renderTarget);
+        this.renderer.render(scene, camera);
+        this.renderer.setRenderTarget(null);
+        this.renderer.render(this.scene2, this.camera2);
+      }
+      setFlicker(amount) {
+        this.quad.material.uniforms.uFlicker.value = amount;
+      }
+      setNoise(amount) {
+        this.quad.material.uniforms.uNoise.value = amount;
+      }
+    }
+
+    // ===== World Builder =====
+    class WorldBuilder {
+      constructor(scene) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.scene.add(this.group);
+        this.colliders = [];
+        this.interactables = [];
+        this.lights = [];
+        this.ghostSpawnPoints = [];
+        this.lightsOn = false;
+        this.build();
+      }
+      addCollider(min, max) {
+        this.colliders.push(new THREE.Box3(min, max));
+      }
+      build() {
+        const floorMat = new THREE.MeshStandardMaterial({ map: Textures.floor, roughness: 0.8 });
+        const wallMat = new THREE.MeshStandardMaterial({ map: Textures.wall, roughness: 0.9 });
+        const ceilingMat = new THREE.MeshStandardMaterial({ map: Textures.ceiling, roughness: 0.9 });
+        const shelfMat = new THREE.MeshStandardMaterial({ map: Textures.shelf, roughness: 0.5, metalness: 0.3 });
+        const fridgeMat = new THREE.MeshStandardMaterial({ map: Textures.fridge, emissive: 0x112233, emissiveIntensity: 0.2 });
+        const registerMat = new THREE.MeshStandardMaterial({ map: Textures.register, emissive: 0x003300, emissiveIntensity: 0.3 });
+
+        // Floor
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 16), floorMat);
+        floor.rotation.x = -Math.PI/2;
+        this.group.add(floor);
+
+        // Ceiling
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(12, 16), ceilingMat);
+        ceiling.rotation.x = Math.PI/2;
+        ceiling.position.y = 3;
+        this.group.add(ceiling);
+
+        // Walls
+        const wallN = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), wallMat);
+        wallN.position.set(0, 1.5, -8);
+        this.group.add(wallN);
+
+        const wallS = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), wallMat);
+        wallS.position.set(0, 1.5, 8);
+        wallS.rotation.y = Math.PI;
+        this.group.add(wallS);
+
+        const wallW = new THREE.Mesh(new THREE.PlaneGeometry(16, 3), wallMat);
+        wallW.position.set(-6, 1.5, 0);
+        wallW.rotation.y = Math.PI/2;
+        this.group.add(wallW);
+
+        const wallE = new THREE.Mesh(new THREE.PlaneGeometry(16, 3), wallMat);
+        wallE.position.set(6, 1.5, 0);
+        wallE.rotation.y = -Math.PI/2;
+        this.group.add(wallE);
+
+        // Outer bounds colliders
+        this.addCollider(new THREE.Vector3(-6.2, 0, -8.2), new THREE.Vector3(6.2, 3, -8));
+        this.addCollider(new THREE.Vector3(-6.2, 0, 8), new THREE.Vector3(6.2, 3, 8.2));
+        this.addCollider(new THREE.Vector3(-6.2, 0, -8), new THREE.Vector3(-6, 3, 8));
+        this.addCollider(new THREE.Vector3(6, 0, -8), new THREE.Vector3(6.2, 3, 8));
+
+        // Windows on south wall
+        for (let x of [-3.5, 3.5]) {
+          const win = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.5), new THREE.MeshBasicMaterial({ color: 0x05070a }));
+          win.position.set(x, 1.5, 7.95);
+          win.rotation.y = Math.PI;
+          this.group.add(win);
+        }
+
+        // Shelves
+        this.createShelf(0, -2, 2, 6);
+        this.createShelf(0, 2, 2, 6);
+        this.createShelf(-3, -2, 1.5, 4);
+        this.createShelf(3, 2, 1.5, 4);
+
+        // Fridge row north
+        for (let i = -4; i <= 4; i += 2) {
+          const fridge = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.8, 1), fridgeMat);
+          fridge.position.set(i, 1.4, -7);
+          this.group.add(fridge);
+          this.addCollider(new THREE.Vector3(i-0.9, 0, -7.5), new THREE.Vector3(i+0.9, 2.8, -6.5));
+        }
+
+        // Register counter south-east
+        const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 1.1, 1.2), new THREE.MeshStandardMaterial({ color: 0x553322 }));
+        counter.position.set(3.5, 0.55, 6.5);
+        this.group.add(counter);
+        this.addCollider(new THREE.Vector3(2, 0, 5.9), new THREE.Vector3(5, 1.1, 7.1));
+
+        const register = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.5), registerMat);
+        register.position.set(3.5, 1.35, 6.2);
+        register.userData = { type: 'register', name: 'レジ' };
+        this.group.add(register);
+        this.interactables.push(register);
+
+        // Time clock near entrance
+        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.1), new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0x001100, emissiveIntensity: 0.2 }));
+        clockBox.position.set(-4, 1.4, 7.4);
+        clockBox.userData = { type: 'clock', name: 'タイムレコーダー' };
+        this.group.add(clockBox);
+        this.interactables.push(clockBox);
+
+        // Light switch
+        const switchBox = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.05), new THREE.MeshStandardMaterial({ color: 0xeeeeee }));
+        switchBox.position.set(-5.8, 1.4, 4);
+        switchBox.userData = { type: 'lightswitch', name: '電気スイッチ' };
+        this.group.add(switchBox);
+        this.interactables.push(switchBox);
+
+        // Back door
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x3a3a3a }));
+        door.position.set(-5.9, 1.2, -4);
+        door.userData = { type: 'backdoor', name: '裏口' };
+        this.group.add(door);
+        this.interactables.push(door);
+
+        // Front door trigger
+        const frontDoor = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 0.2), new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.2 }));
+        frontDoor.position.set(0, 1.25, 7.8);
+        frontDoor.userData = { type: 'frontdoor', name: '入口' };
+        this.group.add(frontDoor);
+        this.interactables.push(frontDoor);
+
+        // Trash
+        const trash = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), new THREE.MeshStandardMaterial({ color: 0x444422 }));
+        trash.position.set(5, 0.3, -5);
+        trash.userData = { type: 'trash', name: 'ゴミ袋' };
+        this.group.add(trash);
+        this.interactables.push(trash);
+
+        // Restock shelf zone
+        const restockZone = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.8), new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 0.0 }));
+        restockZone.position.set(0, 0.8, 1.3);
+        restockZone.userData = { type: 'shelf', name: '陳列棚' };
+        this.group.add(restockZone);
+        this.interactables.push(restockZone);
+
+        // Products
+        this.addProducts();
+
+        // Lights
+        const ambient = new THREE.AmbientLight(0x111122, 0.05);
+        this.group.add(ambient);
+        this.lights.push({ light: ambient, baseIntensity: 0.4 });
+
+        for (let z = -6; z <= 6; z += 4) {
+          const pl = new THREE.PointLight(0xccddff, 0, 8);
+          pl.position.set(0, 2.8, z);
+          this.group.add(pl);
+          this.lights.push({ light: pl, baseIntensity: 0.55 });
+        }
+
+        // Register glow
+        const regLight = new THREE.PointLight(0x00ff00, 0.3, 3);
+        regLight.position.set(3.5, 1.5, 6.2);
+        this.group.add(regLight);
+
+        this.ghostSpawnPoints = [
+          new THREE.Vector3(0, 0, -7),
+          new THREE.Vector3(-5, 0, -4),
+          new THREE.Vector3(5, 0, 0),
+          new THREE.Vector3(0, 0, 2)
+        ];
+      }
+      createShelf(cx, cz, w, d) {
+        const mat = new THREE.MeshStandardMaterial({ map: Textures.shelf, roughness: 0.5, metalness: 0.3 });
+        const h = 1.6;
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        shelf.position.set(cx, h/2, cz);
+        this.group.add(shelf);
+        this.addCollider(new THREE.Vector3(cx-w/2-0.1, 0, cz-d/2-0.1), new THREE.Vector3(cx+w/2+0.1, h, cz+d/2+0.1));
+      }
+      addProducts() {
+        const mats = [Textures.product1, Textures.product2, Textures.product3];
+        const positions = [
+          [-0.8, 1.0, -2], [0.2, 1.0, -2], [0.8, 1.2, -2],
+          [-0.6, 1.0, 2], [0.4, 1.0, 2],
+          [-3.2, 0.9, -2], [-2.8, 1.1, -2],
+          [3.2, 0.9, 2], [2.8, 1.1, 2]
+        ];
+        positions.forEach((pos, idx) => {
+          const mat = new THREE.MeshStandardMaterial({ map: mats[idx % mats.length] });
+          const box = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.2), mat);
+          box.position.set(...pos);
+          this.group.add(box);
+        });
+      }
+      setLightsOn(on) {
+        this.lightsOn = on;
+        this.lights.forEach(item => {
+          if (item.light.isAmbientLight) {
+            item.light.intensity = on ? item.baseIntensity : 0.05;
+          } else {
+            item.light.intensity = on ? item.baseIntensity : 0.03;
+          }
+        });
+      }
+    }
+
+    // ===== Player Controller =====
+    class PlayerController {
+      constructor(camera, world) {
+        this.camera = camera;
+        this.world = world;
+        this.position = new THREE.Vector3(0, 1.6, 6);
+        this.velocity = new THREE.Vector3();
+        this.direction = new THREE.Vector3();
+        this.moveForward = false;
+        this.moveBackward = false;
+        this.moveLeft = false;
+        this.moveRight = false;
+        this.yaw = 0;
+        this.pitch = 0;
+        this.speed = 2.6;
+        this.radius = 0.28;
+        this.headBob = 0;
+        this.footstepTimer = 0;
+        this.init();
+      }
+      init() {
+        this.camera.position.copy(this.position);
+        this.flashlight = new THREE.SpotLight(0xffffee, 2.2, 16, Math.PI/5, 0.5, 1.5);
+        this.flashlight.position.set(0, -0.05, 0);
+        this.camera.add(this.flashlight);
+        const target = new THREE.Object3D();
+        target.position.set(0, -0.05, -1);
+        this.camera.add(target);
+        this.flashlight.target = target;
+
+        document.addEventListener('keydown', e => this.onKeyDown(e));
+        document.addEventListener('keyup', e => this.onKeyUp(e));
+        document.addEventListener('mousemove', e => this.onMouseMove(e));
+      }
+      onKeyDown(e) {
+        switch(e.code) {
+          case 'KeyW': case 'ArrowUp': this.moveForward = true; break;
+          case 'KeyS': case 'ArrowDown': this.moveBackward = true; break;
+          case 'KeyA': case 'ArrowLeft': this.moveLeft = true; break;
+          case 'KeyD': case 'ArrowRight': this.moveRight = true; break;
+          case 'KeyF': this.toggleFlashlight(); break;
+        }
+      }
+      onKeyUp(e) {
+        switch(e.code) {
+          case 'KeyW': case 'ArrowUp': this.moveForward = false; break;
+          case 'KeyS': case 'ArrowDown': this.moveBackward = false; break;
+          case 'KeyA': case 'ArrowLeft': this.moveLeft = false; break;
+          case 'KeyD': case 'ArrowRight': this.moveRight = false; break;
+        }
+      }
+      onMouseMove(e) {
+        if (document.pointerLockElement !== document.body) return;
+        const sensitivity = 0.002;
+        this.yaw -= e.movementX * sensitivity;
+        this.pitch -= e.movementY * sensitivity;
+        this.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, this.pitch));
+      }
+      toggleFlashlight() {
+        this.flashlight.intensity = this.flashlight.intensity > 0 ? 0 : 2.2;
+      }
+      update(dt, audio) {
+        this.direction.set(0, 0, 0);
+        if (this.moveForward) this.direction.z -= 1;
+        if (this.moveBackward) this.direction.z += 1;
+        if (this.moveLeft) this.direction.x -= 1;
+        if (this.moveRight) this.direction.x += 1;
+        if (this.direction.length() > 0) this.direction.normalize();
+
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        forward.y = 0; forward.normalize();
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+        right.y = 0; right.normalize();
+
+        const move = new THREE.Vector3();
+        move.addScaledVector(forward, -this.direction.z);
+        move.addScaledVector(right, this.direction.x);
+        if (move.length() > 1) move.normalize();
+
+        const desired = move.multiplyScalar(this.speed * dt);
+        this.tryMove(desired);
+
+        this.camera.rotation.order = 'YXZ';
+        this.camera.rotation.y = this.yaw;
+        this.camera.rotation.x = this.pitch;
+
+        const isMoving = this.direction.length() > 0;
+        if (isMoving) {
+          this.headBob += dt * 10;
+          this.footstepTimer += dt;
+          if (this.footstepTimer > 0.4) {
+            audio.playFootstep();
+            this.footstepTimer = 0;
+          }
+        } else {
+          this.headBob = 0;
+          this.footstepTimer = 0;
+        }
+        this.camera.position.y = this.position.y + Math.sin(this.headBob) * 0.03;
+      }
+      tryMove(desired) {
+        const newPos = this.position.clone().add(desired);
+        const playerBox = new THREE.Box3(
+          new THREE.Vector3(newPos.x - this.radius, 0, newPos.z - this.radius),
+          new THREE.Vector3(newPos.x + this.radius, 1.8, newPos.z + this.radius)
+        );
+        let collided = false;
+        for (const collider of this.world.colliders) {
+          if (playerBox.intersectsBox(collider)) {
+            collided = true;
+            break;
+          }
+        }
+        if (!collided) {
+          this.position.copy(newPos);
+          this.camera.position.x = this.position.x;
+          this.camera.position.z = this.position.z;
+        }
+      }
+    }
+
+    // ===== Ghost AI =====
+    class GhostAI {
+      constructor(scene, world, player, game) {
+        this.scene = scene;
+        this.world = world;
+        this.player = player;
+        this.game = game;
+        this.state = 'hidden';
+        this.mesh = this.createMesh();
+        this.scene.add(this.mesh);
+        this.mesh.visible = false;
+        this.timer = 0;
+        this.nextEventTime = 8;
+        this.chaseSpeed = 2.3;
+      }
+      createMesh() {
+        const group = new THREE.Group();
+        const body = new THREE.Mesh(
+          new THREE.CapsuleGeometry(0.35, 1.4, 4, 8),
+          new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true, opacity: 0.85 })
+        );
+        body.position.y = 1.0;
+        group.add(body);
+        const head = new THREE.Mesh(
+          new THREE.SphereGeometry(0.25, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0x080808 })
+        );
+        head.position.y = 1.9;
+        group.add(head);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.04), eyeMat);
+        leftEye.position.set(-0.08, 1.95, 0.2);
+        group.add(leftEye);
+        const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.04), eyeMat);
+        rightEye.position.set(0.08, 1.95, 0.2);
+        group.add(rightEye);
+        return group;
+      }
+      update(dt, audio) {
+        this.timer += dt;
+        if (this.state === 'hidden') {
+          if (this.timer > this.nextEventTime) {
+            this.triggerEvent(audio);
+            this.timer = 0;
+            this.nextEventTime = Math.random() * 5 + 5;
+          }
+        } else if (this.state === 'peek') {
+          const dist = this.mesh.position.distanceTo(this.player.position);
+          this.mesh.lookAt(this.player.position);
+          if (dist < 4 || this.timer > 4) {
+            this.setState('hidden');
+          }
+        } else if (this.state === 'flicker') {
+          this.mesh.visible = Math.random() > 0.5;
+          if (this.timer > 2) {
+            this.setState('hidden');
+          }
+        } else if (this.state === 'chase') {
+          const dir = new THREE.Vector3().subVectors(this.player.position, this.mesh.position);
+          dir.y = 0;
+          const dist = dir.length();
+          dir.normalize();
+          this.mesh.position.add(dir.multiplyScalar(this.chaseSpeed * dt));
+          this.mesh.lookAt(this.player.position);
+          if (dist < 1.5) {
+            this.game.endGame(false);
+          }
+        }
+      }
+      triggerEvent(audio) {
+        const roll = Math.random();
+        if (roll < 0.4) {
+          this.setState('peek');
+          const pt = this.world.ghostSpawnPoints[Math.floor(Math.random() * this.world.ghostSpawnPoints.length)];
+          this.mesh.position.copy(pt);
+          this.mesh.visible = true;
+          audio.playGlitch();
+        } else if (roll < 0.7) {
+          this.setState('flicker');
+          const pt = this.world.ghostSpawnPoints[Math.floor(Math.random() * this.world.ghostSpawnPoints.length)];
+          this.mesh.position.copy(pt);
+          audio.playGlitch();
+        } else {
+          audio.playGlitch();
+          this.game.world.setLightsOn(false);
+          setTimeout(() => this.game.world.setLightsOn(true), 300);
+        }
+      }
+      startChase() {
+        this.setState('chase');
+        const pt = this.world.ghostSpawnPoints[0];
+        this.mesh.position.copy(pt);
+        this.mesh.visible = true;
+      }
+      setState(s) {
+        this.state = s;
+        this.timer = 0;
+        if (s === 'hidden') this.mesh.visible = false;
+      }
+    }
+
+    // ===== Interaction System =====
+    class InteractionSystem {
+      constructor(camera, world, ui, game) {
+        this.camera = camera;
+        this.world = world;
+        this.ui = ui;
+        this.game = game;
+        this.raycaster = new THREE.Raycaster();
+        this.target = null;
+        document.addEventListener('keydown', e => {
+          if (e.code === 'KeyE' || e.code === 'Space') {
+            this.interact();
+          }
+        });
+        document.addEventListener('mousedown', () => {
+          if (document.pointerLockElement === document.body) this.interact();
+        });
+      }
+      update() {
+        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+        const intersects = this.raycaster.intersectObjects(this.world.interactables, false);
+        if (intersects.length > 0 && intersects[0].distance < 3) {
+          this.target = intersects[0].object;
+          this.ui.showPrompt(this.target.userData.name);
+        } else {
+          this.target = null;
+          this.ui.hidePrompt();
+        }
+      }
+      interact() {
+        if (!this.target) return;
+        this.game.handleInteraction(this.target.userData.type);
+      }
+    }
+
+    // ===== UI =====
+    class UI {
+      constructor() {
+        this.startScreen = document.getElementById('start-screen');
+        this.gameUI = document.getElementById('game-ui');
+        this.endScreen = document.getElementById('end-screen');
+        this.taskList = document.getElementById('task-list');
+        this.prompt = document.getElementById('interaction-prompt');
+        this.message = document.getElementById('message');
+        this.fearOverlay = document.getElementById('fear-overlay');
+        this.startBtn = document.getElementById('start-btn');
+        this.restartBtn = document.getElementById('restart-btn');
+      }
+      showGame() {
+        this.startScreen.style.opacity = 0;
+        setTimeout(() => {
+          this.startScreen.style.display = 'none';
+          this.gameUI.style.display = 'block';
+        }, 800);
+      }
+      showEnd(title, subtitle) {
+        this.gameUI.style.display = 'none';
+        this.endScreen.style.display = 'flex';
+        document.getElementById('end-title').textContent = title;
+        document.getElementById('end-subtitle').textContent = subtitle;
+        setTimeout(() => this.endScreen.style.opacity = 1, 50);
+      }
+      updateTasks(tasks, activeIdx) {
+        this.taskList.innerHTML = '';
+        tasks.forEach((t, i) => {
+          const div = document.createElement('div');
+          div.className = 'task' + (t.done ? ' done' : '') + (i === activeIdx && !t.done ? ' active' : '');
+          div.textContent = (t.done ? '✓ ' : '○ ') + t.text;
+          this.taskList.appendChild(div);
+        });
+      }
+      showPrompt(text) {
+        this.prompt.textContent = 'E: ' + text;
+        this.prompt.style.opacity = 1;
+      }
+      hidePrompt() {
+        this.prompt.style.opacity = 0;
+      }
+      showMessage(text, duration = 2000) {
+        this.message.textContent = text;
+        this.message.style.opacity = 1;
+        setTimeout(() => this.message.style.opacity = 0, duration);
+      }
+      setFear(amount) {
+        this.fearOverlay.style.boxShadow = `inset 0 0 ${amount * 120}px rgba(139,0,0,${amount * 0.7})`;
+      }
+    }
+
+    // ===== Task System =====
+    class TaskSystem {
+      constructor(ui) {
+        this.ui = ui;
+        this.tasks = [
+          { text: 'タイムレコーダーで出勤', done: false },
+          { text: '店内の電気をつける', done: false },
+          { text: '陳列棚を整理する', done: false },
+          { text: 'レジを確認する', done: false },
+          { text: '裏口のゴミを出す', done: false },
+          { text: '急いで入口から逃げる', done: false }
+        ];
+        this.activeIndex = 0;
+        this.updateUI();
+      }
+      updateUI() {
+        this.ui.updateTasks(this.tasks, this.activeIndex);
+      }
+      completeCurrent() {
+        if (this.activeIndex < this.tasks.length) {
+          this.tasks[this.activeIndex].done = true;
+          this.activeIndex++;
+          this.updateUI();
+        }
+      }
+      getCurrentType() {
+        const map = ['clock', 'lightswitch', 'shelf', 'register', 'backdoor', 'frontdoor'];
+        return map[this.activeIndex];
+      }
+      isComplete() {
+        return this.activeIndex >= this.tasks.length;
+      }
+    }
+
+    // ===== Game =====
+    class Game {
+      constructor() {
+        this.ui = new UI();
+        this.audio = new AudioEngine();
+        this.renderer = new THREE.WebGLRenderer({ antialias: false });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(1);
+        document.body.appendChild(this.renderer.domElement);
+
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x05070a, 0.15);
+
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        this.world = new WorldBuilder(this.scene);
+        this.player = new PlayerController(this.camera, this.world);
+        this.interaction = new InteractionSystem(this.camera, this.world, this.ui, this);
+        this.tasks = new TaskSystem(this.ui);
+        this.ghost = new GhostAI(this.scene, this.world, this.player, this);
+        this.post = new PostProcess(this.renderer);
+
+        this.clock = new THREE.Clock();
+        this.gameState = 'menu';
+        this.fearLevel = 0;
+        this.chaseStarted = false;
+
+        this.ui.startBtn.addEventListener('click', () => this.start());
+        this.ui.restartBtn.addEventListener('click', () => location.reload());
+        document.addEventListener('click', () => {
+          if (this.gameState === 'menu') this.start();
+        });
+        window.addEventListener('resize', () => this.onResize());
+      }
+      start() {
+        if (this.gameState !== 'menu') return;
+        document.body.requestPointerLock();
+        this.audio.init();
+        this.ui.showGame();
+        this.world.setLightsOn(false);
+        this.gameState = 'playing';
+        this.ui.showMessage('深夜のコンビニへようこそ。まず出勤ボタンを押してください。', 4000);
+        this.animate();
+      }
+      handleInteraction(type) {
+        const current = this.tasks.getCurrentType();
+        if (type !== current) {
+          if (type === 'lightswitch' && current === 'clock') {
+            this.ui.showMessage('まだ出勤していません。');
+          }
+          return;
+        }
+        if (type === 'clock') {
+          this.ui.showMessage('出勤しました。');
+          this.tasks.completeCurrent();
+        } else if (type === 'lightswitch') {
+          this.world.setLightsOn(true);
+          this.ui.showMessage('電気がつきました。');
+          this.tasks.completeCurrent();
+        } else if (type === 'shelf') {
+          this.ui.showMessage('陳列棚を整理しました。');
+          this.tasks.completeCurrent();
+        } else if (type === 'register') {
+          this.ui.showMessage('レジ処理を完了しました。');
+          this.tasks.completeCurrent();
+        } else if (type === 'backdoor') {
+          this.ui.showMessage('ゴミを出しました。');
+          this.tasks.completeCurrent();
+          setTimeout(() => {
+            this.ui.showMessage('何かの気配がする...', 3000);
+            this.audio.setDroneIntensity(0.8);
+            this.fearLevel = 0.6;
+            setTimeout(() => {
+              this.ghost.startChase();
+              this.chaseStarted = true;
+            }, 3000);
+          }, 1000);
+        } else if (type === 'frontdoor') {
+          this.ui.showMessage('逃げ出しました！');
+          this.tasks.completeCurrent();
+          this.endGame(true);
+        }
+      }
+      endGame(escaped) {
+        this.gameState = 'ended';
+        document.exitPointerLock();
+        if (escaped) {
+          this.ui.showEnd('脱出成功', 'あなたは無事に帰宅できた。');
+        } else {
+          this.ui.showEnd('消えた', '誰もあなたの行方を知らない。');
+        }
+      }
+      onResize() {
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+      animate() {
+        if (this.gameState !== 'playing') return;
+        requestAnimationFrame(() => this.animate());
+        const dt = this.clock.getDelta();
+        this.player.update(dt, this.audio);
+        this.interaction.update();
+        this.ghost.update(dt, this.audio);
+
+        if (this.ghost.state !== 'hidden') {
+          const dist = this.ghost.mesh.position.distanceTo(this.player.position);
+          const targetFear = Math.max(0, 1 - dist / 8);
+          this.fearLevel += (targetFear - this.fearLevel) * 2 * dt;
+          if (Math.random() < dt * 2) this.audio.playHeartbeat();
+        } else {
+          this.fearLevel += (0 - this.fearLevel) * dt;
+        }
+        this.ui.setFear(this.fearLevel);
+
+        if (this.chaseStarted && Math.random() < dt * 0.5) {
+          this.post.setFlicker(0.3 + Math.random() * 0.4);
+          setTimeout(() => this.post.setFlicker(0), 100);
+        }
+
+        this.post.render(this.scene, this.camera, dt);
+      }
+    }
+
+    const game = new Game();
+  </script>
+</body>
+</html>
